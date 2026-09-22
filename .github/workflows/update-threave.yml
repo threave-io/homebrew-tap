@@ -1,0 +1,71 @@
+name: Update Threave
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@v6
+
+      - name: Resolve latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(gh release view -R threave-io/threave --json tagName --jq .tagName)"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unexpected release tag: $tag" >&2
+            exit 1
+          fi
+          source_url="https://github.com/threave-io/threave/archive/refs/tags/${tag}.tar.gz"
+          source_sha="$(curl -L -sSf "$source_url" | sha256sum | awk '{print $1}')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          if grep -Fq "tags/${tag}.tar.gz" Formula/threave.rb; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update formula
+        if: steps.release.outputs.needs_update == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          SOURCE_SHA256: ${{ steps.release.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L -sSf "https://raw.githubusercontent.com/threave-io/threave/${TAG}/packaging/homebrew/threave.rb.template" -o Formula/threave.rb
+          perl -0pi -e 's/\{\{VERSION\}\}/$ENV{VERSION}/g; s/\{\{SOURCE_SHA256\}\}/$ENV{SOURCE_SHA256}/g' Formula/threave.rb
+          printf '{"gorchestra":"threave"}\n' > formula_renames.json
+          rm -f Formula/gorchestra.rb
+          ruby -c Formula/threave.rb
+
+      - name: Commit tap update
+        if: steps.release.outputs.needs_update == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/threave.rb Formula/gorchestra.rb formula_renames.json
+          if git diff --cached --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git commit -m "Update threave to ${VERSION}"
+          git push
