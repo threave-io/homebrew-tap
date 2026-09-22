@@ -69,3 +69,15 @@ jobs:
           fi
           git commit -m "Update threave to ${VERSION}"
           git push
+
+  validate:
+    if: github.event_name == 'workflow_dispatch'
+    needs: update
+    runs-on: macos-latest
+    steps:
+      - name: Install and test formula
+        run: |
+          brew tap threave-io/tap
+          brew audit --strict --online threave-io/tap/threave
+          brew install threave-io/tap/threave
+          brew test threave-io/tap/threave
