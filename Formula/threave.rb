@@ -1,8 +1,8 @@
 class Threave < Formula
   desc "Coordinate durable AI coding agent sessions"
   homepage "https://threave.io"
-  url "https://github.com/threave-io/threave/archive/refs/tags/v0.12.4.tar.gz"
-  sha256 "f93b30462d5dd8368da424483ef17787855a981e4cd9fc1fa560b71b53266416"
+  url "https://github.com/threave-io/threave/archive/refs/tags/v0.12.5.tar.gz"
+  sha256 "955799b29ae22447542ed09474a9660e086734abbd0e728cabec067de82a3800"
   license "MIT"
   head "https://github.com/threave-io/threave.git", branch: "main"
 
